@@ -161,6 +161,13 @@ choices pointing at stages that do not exist. `Game` runs it on construction, so
 a typo in content is one clear report instead of an exception 30 days into a
 simulation.
 
+## Also in this repository
+
+[`github-account-switcher/`](github-account-switcher/) — a Firefox extension
+(desktop and Android) that switches between GitHub accounts in one tap by
+swapping session cookies. See its README for install and usage instructions
+(in Russian).
+
 ## Layout
 
 ```
