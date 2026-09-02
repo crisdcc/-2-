@@ -133,6 +133,32 @@ describe("serializeCookie / toSetDetails roundtrip", () => {
     expect(GH.toSetDetails(serialized).domain).toBe(".github.com");
   });
 
+  it("restores into the destination store, not the captured one", () => {
+    const serialized = GH.serializeCookie(
+      cookie({
+        name: "user_session",
+        value: "x",
+        storeId: "firefox-container-1",
+      }),
+    );
+    const details = GH.toSetDetails(serialized, "firefox-container-2");
+    expect(details.storeId).toBe("firefox-container-2");
+    // Without a destination the captured store is preserved.
+    expect(GH.toSetDetails(serialized).storeId).toBe("firefox-container-1");
+  });
+
+  it("preserves firstPartyDomain for first-party isolation", () => {
+    const serialized = GH.serializeCookie(
+      cookie({ name: "user_session", value: "x", firstPartyDomain: "github.com" }),
+    );
+    expect(serialized.firstPartyDomain).toBe("github.com");
+    expect(GH.toSetDetails(serialized).firstPartyDomain).toBe("github.com");
+    // No firstPartyDomain on the source cookie: nothing is written.
+    const plain = GH.serializeCookie(cookie({ name: "user_session", value: "x" }));
+    expect(plain.firstPartyDomain).toBeUndefined();
+    expect(GH.toSetDetails(plain).firstPartyDomain).toBeUndefined();
+  });
+
   it("does not write expirationDate for session cookies", () => {
     const serialized = GH.serializeCookie(cookie({ session: true })); // no expirationDate
     expect(serialized.expirationDate).toBeUndefined();

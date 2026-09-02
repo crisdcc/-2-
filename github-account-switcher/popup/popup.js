@@ -155,9 +155,13 @@ function profileRow(profile, isActive) {
   row.appendChild(editBtn);
   row.appendChild(deleteBtn);
 
-  row.addEventListener("click", () => switchTo(row, profile));
+  row.addEventListener("click", (ev) => {
+    // Nested buttons and the rename input handle their own events.
+    if (ev.target.closest("button, input")) return;
+    switchTo(row, profile);
+  });
   row.addEventListener("keydown", (ev) => {
-    if (ev.key === "Enter" || ev.key === " ") {
+    if (ev.target === row && (ev.key === "Enter" || ev.key === " ")) {
       ev.preventDefault();
       switchTo(row, profile);
     }
@@ -202,11 +206,17 @@ async function switchTo(row, profile) {
 }
 
 async function removeProfile(id) {
-  const res = await send({ type: "delete", id: id });
-  if (res.ok) {
-    refresh();
-  } else {
-    showStatus("Не удалось удалить: " + res.error);
+  if (busy) return;
+  busy = true;
+  try {
+    const res = await send({ type: "delete", id: id });
+    if (res.ok) {
+      refresh();
+    } else {
+      showStatus("Не удалось удалить: " + res.error);
+    }
+  } finally {
+    busy = false;
   }
 }
 
@@ -222,23 +232,46 @@ function startRename(row, profile) {
 
   const commit = async () => {
     if (committed) return;
-    committed = true;
-    const res = await send({ type: "rename", id: profile.id, name: input.value });
-    if (res.ok) {
-      refresh();
-    } else {
-      showStatus("Не удалось переименовать: " + res.error);
-      refresh();
-    }
+    await withBusy(async () => {
+      committed = true;
+      const res = await send({ type: "rename", id: profile.id, name: input.value });
+      if (res.ok) {
+        refresh();
+      } else {
+        showStatus("Не удалось переименовать: " + res.error);
+        refresh();
+      }
+    });
   };
 
+  input.addEventListener("click", (ev) => ev.stopPropagation());
   input.addEventListener("keydown", (ev) => {
+    ev.stopPropagation();
     if (ev.key === "Enter") commit();
     if (ev.key === "Escape") refresh();
   });
   input.addEventListener("blur", () => {
-    if (!committed) refresh();
+    // Defer so a second rename started right after this one is not wiped by
+    // the re-render of this blur.
+    setTimeout(() => {
+      const anotherRename = [...document.querySelectorAll(".rename-input")].some(
+        (el) => el !== input,
+      );
+      if (!committed && !anotherRename) refresh();
+    }, 0);
   });
+}
+
+// Serialize rename/delete/capture against each other in the popup too; the
+// background page serializes the actual storage writes.
+async function withBusy(fn) {
+  if (busy) return;
+  busy = true;
+  try {
+    await fn();
+  } finally {
+    busy = false;
+  }
 }
 
 document.querySelector("#openBtn").addEventListener("click", () => {
@@ -246,19 +279,18 @@ document.querySelector("#openBtn").addEventListener("click", () => {
   window.close();
 });
 
-document.querySelector("#saveBtn").addEventListener("click", async () => {
-  if (busy) return;
-  busy = true;
-  const res = await send({ type: "capture" });
-  busy = false;
-  if (res.ok) {
-    showStatus("Сохранён: @" + (res.profile.username || "аккаунт"), true);
-    refresh();
-  } else if (res.error === "no-login") {
-    showStatus("Сначала войдите в GitHub: откройте github.com и войдите под нужным аккаунтом.");
-  } else {
-    showStatus("Не удалось сохранить: " + res.error);
-  }
+document.querySelector("#saveBtn").addEventListener("click", () => {
+  withBusy(async () => {
+    const res = await send({ type: "capture" });
+    if (res.ok) {
+      showStatus("Сохранён: @" + (res.profile.username || "аккаунт"), true);
+      refresh();
+    } else if (res.error === "no-login") {
+      showStatus("Сначала войдите в GitHub: откройте github.com и войдите под нужным аккаунтом.");
+    } else {
+      showStatus("Не удалось сохранить: " + res.error);
+    }
+  });
 });
 
 refresh();

@@ -13,6 +13,7 @@ export interface GHCookieLike {
   hostOnly?: boolean;
   sameSite?: string;
   expirationDate?: number;
+  firstPartyDomain?: string;
   storeId?: string;
   partitionKey?: { topLevelSite: string | null };
   [key: string]: unknown;
@@ -48,7 +49,10 @@ export interface GHASLib {
   normalizeSameSite(value: string): "strict" | "lax" | "no_restriction";
   cookieUrl(cookie: { domain: string; path: string }): string;
   serializeCookie(cookie: GHCookieLike): Record<string, unknown>;
-  toSetDetails(cookie: Record<string, unknown>): Record<string, unknown>;
+  toSetDetails(
+    cookie: Record<string, unknown>,
+    storeId?: string,
+  ): Record<string, unknown>;
   usernameFromCookies(
     cookies: Array<{ name: string; value: string }>,
   ): string | null;

@@ -67,6 +67,7 @@ function serializeCookie(cookie) {
     url: cookieUrl(cookie),
   };
   if (cookie.expirationDate) out.expirationDate = cookie.expirationDate;
+  if (cookie.firstPartyDomain) out.firstPartyDomain = cookie.firstPartyDomain;
   if (cookie.storeId) out.storeId = cookie.storeId;
   if (cookie.partitionKey && cookie.partitionKey.topLevelSite) {
     out.partitionKey = cookie.partitionKey;
@@ -77,7 +78,9 @@ function serializeCookie(cookie) {
 // Arguments for browser.cookies.set(). Host-only cookies (including all
 // __Host-* cookies) must be recreated without a `domain`, otherwise the
 // browser turns them into domain cookies and GitHub rejects the session.
-function toSetDetails(cookie) {
+// `storeId` is the destination store: the switch target wins over the store
+// the session was originally captured in.
+function toSetDetails(cookie, storeId) {
   const details = {
     url: cookie.url,
     name: cookie.name,
@@ -89,7 +92,9 @@ function toSetDetails(cookie) {
   };
   if (cookie.expirationDate) details.expirationDate = cookie.expirationDate;
   if (!cookie.hostOnly) details.domain = cookie.domain;
-  if (cookie.storeId) details.storeId = cookie.storeId;
+  if (cookie.firstPartyDomain) details.firstPartyDomain = cookie.firstPartyDomain;
+  if (storeId) details.storeId = storeId;
+  else if (cookie.storeId) details.storeId = cookie.storeId;
   if (cookie.partitionKey && cookie.partitionKey.topLevelSite) {
     details.partitionKey = cookie.partitionKey;
   }
