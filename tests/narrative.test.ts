@@ -101,6 +101,21 @@ describe("NarrativeEngine", () => {
     expect(h.state.arcs["branch"]!.outcome).toBe("walked");
   });
 
+  it("explains the gate on an option the player cannot take", () => {
+    const { h, engine } = run({ branch: branching });
+    h.state.arcs["branch"] = {
+      arcId: "branch", stage: "fork", startedDay: 0, completed: false, history: [],
+    };
+    const seen: string[] = [];
+    engine.tick(h.state, new Rng("a"), h.log, (prompt) => {
+      for (const option of prompt.options) {
+        seen.push(`${option.id}:${option.available}:${option.requirement ?? "-"}`);
+      }
+      return prompt.options.find((o) => o.available)!.id;
+    });
+    expect(seen).toEqual(["rich:false:gold >= 200", "cheap:true:-"]);
+  });
+
   it("takes a gated option once it becomes affordable", () => {
     const { h, engine } = run({ branch: branching });
     h.state.resources["gold"] = 200;

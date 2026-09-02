@@ -9,7 +9,7 @@ import type {
 } from "../core/types";
 import type { Rng } from "../core/rng";
 import type { GameLog } from "../core/log";
-import { evaluate } from "../core/conditions";
+import { describeCondition, evaluate } from "../core/conditions";
 import { applyEffects } from "../core/effects";
 
 /**
@@ -182,6 +182,7 @@ export class NarrativeEngine {
         id: choice.id,
         text: choice.text,
         available: evaluate(choice.requires, state),
+        ...(choice.requires ? { requirement: describeCondition(choice.requires) } : {}),
       })),
     };
     if (!prompt.options.some((option) => option.available)) return false;

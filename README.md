@@ -12,12 +12,41 @@ three systems that share one world state:
 Everything downstream of the seed is reproducible: two runs with the same seed,
 content and strategies produce byte-identical chronicles.
 
-## Running it
+## Playing it
+
+Needs [Node.js](https://nodejs.org/) 20 or newer. Works on Windows, macOS and
+Linux.
 
 ```bash
+git clone https://github.com/crisdcc/-2-.git
+cd -2-
 npm install
-npm run sim                  # simulate 40 days of the shipped campaign
-npm test                     # 123 tests
+npm run play
+```
+
+You live one day at a time. Press **Enter** to let a day pass, **r** to march on
+a stronghold, and pick narrative choices yourself when an arc branches —
+options you cannot afford are shown greyed out, with the requirement spelled
+out next to them.
+
+| Key | Does |
+| --- | --- |
+| `Enter` | live through the next day |
+| `r` | march on a stronghold |
+| `p` | the company — health, roles, who is laid up |
+| `s` | standing, story threads and open ground |
+| `j` | the journal so far |
+| `<n>` | let *n* days pass at once |
+| `q` | give up the campaign |
+
+`npm run play -- --seed bravo` replays an exact world; `--terse` hides the
+blow-by-blow of fights. Without a seed, every run is a new one.
+
+## Running it headless
+
+```bash
+npm run sim                  # simulate 40 days with no player, print the chronicle
+npm test                     # 124 tests
 npm run typecheck
 npm run check                # typecheck + tests
 ```
@@ -35,6 +64,9 @@ npm run sim -- --seed bravo --days 60 --choices random --verbose
 | `--no-raids` | Never send the company out |
 | `--verbose` | Include per-action lines in raid logs |
 | `--json` | Emit final state and log as JSON |
+
+`sim` is the engine driving itself — useful for balance work and for seeing a
+whole campaign at once. `play` is the same engine with you in the chair.
 
 ## The day loop
 
@@ -139,8 +171,9 @@ src/
   raid/       combat resolution, planners, applying results
   sim/        the day loop and content validation
   content/    The Ember Marches — abilities, events, arcs, raids
-  cli.ts      chronicle renderer
-tests/        123 tests across all of the above
+  play.ts     interactive terminal game
+  cli.ts      chronicle renderer for headless runs
+tests/        124 tests across all of the above
 ```
 
 ## Using it as a library

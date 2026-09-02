@@ -238,6 +238,8 @@ export interface ChoiceOption {
   id: string;
   text: string;
   available: boolean;
+  /** Readable rendering of the gate, present only when the option has one. */
+  requirement?: string;
 }
 
 export interface PendingChoice {

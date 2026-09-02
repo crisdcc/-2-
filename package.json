@@ -4,9 +4,12 @@
   "private": true,
   "type": "module",
   "description": "A deterministic, data-driven game core: world events, branching narratives, and party raids.",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "sim": "tsx src/cli.ts",
+    "play": "tsx src/play.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
