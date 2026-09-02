@@ -143,8 +143,9 @@ describe("serializeCookie / toSetDetails roundtrip", () => {
     );
     const details = GH.toSetDetails(serialized, "firefox-container-2");
     expect(details.storeId).toBe("firefox-container-2");
-    // Without a destination the captured store is preserved.
-    expect(GH.toSetDetails(serialized).storeId).toBe("firefox-container-1");
+    // Without a destination, no store is written: the captured store is
+    // metadata only and is never reused as a restore target.
+    expect(GH.toSetDetails(serialized).storeId).toBeUndefined();
   });
 
   it("preserves firstPartyDomain for first-party isolation", () => {
@@ -189,8 +190,17 @@ describe("misc helpers", () => {
     expect(GH.normalizeSameSite("strict")).toBe("strict");
     expect(GH.normalizeSameSite("lax")).toBe("lax");
     expect(GH.normalizeSameSite("no_restriction")).toBe("no_restriction");
-    expect(GH.normalizeSameSite("weird")).toBe("no_restriction");
-    expect(GH.normalizeSameSite(undefined as unknown as string)).toBe("no_restriction");
+    expect(GH.normalizeSameSite("unspecified")).toBe("unspecified");
+    expect(GH.normalizeSameSite("weird")).toBe("unspecified");
+    expect(GH.normalizeSameSite(undefined as unknown as string)).toBe("unspecified");
+  });
+
+  it("omits sameSite from restore details when it is unspecified", () => {
+    const serialized = GH.serializeCookie(
+      cookie({ name: "user_session", value: "x", sameSite: "unspecified" }),
+    );
+    expect(serialized.sameSite).toBe("unspecified");
+    expect(GH.toSetDetails(serialized).sameSite).toBeUndefined();
   });
 
   it("sanitizes display names", () => {

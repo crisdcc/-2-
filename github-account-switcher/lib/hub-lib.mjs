@@ -43,9 +43,12 @@ function dedupeCookies(cookies) {
 }
 
 function normalizeSameSite(value) {
-  return value === "strict" || value === "lax" || value === "no_restriction"
+  return value === "strict" ||
+    value === "lax" ||
+    value === "no_restriction" ||
+    value === "unspecified"
     ? value
-    : "no_restriction";
+    : "unspecified";
 }
 
 // URL that the stored cookie belongs to (used for browser.cookies.set and
@@ -78,8 +81,9 @@ function serializeCookie(cookie) {
 // Arguments for browser.cookies.set(). Host-only cookies (including all
 // __Host-* cookies) must be recreated without a `domain`, otherwise the
 // browser turns them into domain cookies and GitHub rejects the session.
-// `storeId` is the destination store: the switch target wins over the store
-// the session was originally captured in.
+// `storeId` is the destination store; the captured store is metadata only and
+// is never used as a restore target. Cookies whose SameSite is unset keep
+// that state by omitting the field.
 function toSetDetails(cookie, storeId) {
   const details = {
     url: cookie.url,
@@ -88,13 +92,14 @@ function toSetDetails(cookie, storeId) {
     path: cookie.path,
     secure: cookie.secure,
     httpOnly: cookie.httpOnly,
-    sameSite: cookie.sameSite,
   };
+  if (cookie.sameSite && cookie.sameSite !== "unspecified") {
+    details.sameSite = cookie.sameSite;
+  }
   if (cookie.expirationDate) details.expirationDate = cookie.expirationDate;
   if (!cookie.hostOnly) details.domain = cookie.domain;
   if (cookie.firstPartyDomain) details.firstPartyDomain = cookie.firstPartyDomain;
   if (storeId) details.storeId = storeId;
-  else if (cookie.storeId) details.storeId = cookie.storeId;
   if (cookie.partitionKey && cookie.partitionKey.topLevelSite) {
     details.partitionKey = cookie.partitionKey;
   }

@@ -17,12 +17,16 @@ const STORAGE_KEY = "profiles";
 // Firefox ignores this value, so passing it always is safe.
 const GITHUB_FIRST_PARTY_DOMAIN = "github.com";
 
-// Profile storage is read-modify-write; serialize mutations so a capture can
-// never overwrite a concurrent delete (or vice versa).
-let storageQueue = Promise.resolve();
-function enqueueStorage(fn) {
-  const run = storageQueue.then(fn, fn);
-  storageQueue = run.then(
+// The store id of ordinary (non-container) tabs in Firefox.
+const DEFAULT_STORE_ID = "firefox-default";
+
+// Profile storage and the cookie store are both read-modify-write: capture,
+// switch, delete and rename must not interleave, or a capture could observe a
+// half-applied switch and concurrent switches could leave a hybrid session.
+let mutationQueue = Promise.resolve();
+function enqueue(fn) {
+  const run = mutationQueue.then(fn, fn);
+  mutationQueue = run.then(
     () => undefined,
     () => undefined,
   );
@@ -48,43 +52,51 @@ async function setProfiles(list) {
   await browser.storage.local.set({ [STORAGE_KEY]: list });
 }
 
-// The cookie store of the active tab, when it is a GitHub tab (this makes
-// container-aware switching work on desktop); otherwise the default store.
-// On Android there is a single store, so this always resolves to undefined.
-async function activeGitHubStore() {
-  const tabs = await browser.tabs.query({
-    active: true,
-    currentWindow: true,
-    url: ["https://*.github.com/*"],
-  });
+// The cookie store of the active tab, whatever site it shows. GitHub tabs
+// know the store even before a switch; non-GitHub tabs default to the store
+// the user is looking at, so a switch lands where the popup was opened.
+async function activeTabStore() {
+  const tabs = await browser.tabs.query({ active: true, currentWindow: true });
   const tab = tabs && tabs[0];
-  return tab && tab.cookieStoreId ? tab.cookieStoreId : undefined;
+  return (tab && tab.cookieStoreId) || DEFAULT_STORE_ID;
 }
 
 async function getAllGithubCookies(storeId) {
   const out = [];
   for (const origin of GHAS.SITE_ORIGINS) {
-    const opts = { url: origin, firstPartyDomain: GITHUB_FIRST_PARTY_DOMAIN };
-    if (storeId) opts.storeId = storeId;
-    out.push(...(await browser.cookies.getAll(opts)));
+    out.push(
+      ...(await browser.cookies.getAll({
+        url: origin,
+        firstPartyDomain: GITHUB_FIRST_PARTY_DOMAIN,
+        storeId: storeId,
+      })),
+    );
   }
   return GHAS.dedupeCookies(out.filter(GHAS.cookieAllowed));
+}
+
+async function removeCookie(opts) {
+  try {
+    await browser.cookies.remove(opts);
+  } catch (err) {
+    // Not necessarily a problem: the cookie may have just expired. The
+    // re-read below is the source of truth.
+  }
+  const remaining = await browser.cookies.get(opts);
+  if (remaining) {
+    throw new Error("Не удалось очистить старую сессию: " + remaining.name);
+  }
 }
 
 async function clearGithubCookies(storeId) {
   const victims = await getAllGithubCookies(storeId);
   for (const cookie of victims) {
-    const opts = {
+    await removeCookie({
       url: GHAS.cookieUrl(cookie),
       name: cookie.name,
       firstPartyDomain: GITHUB_FIRST_PARTY_DOMAIN,
-    };
-    if (storeId) opts.storeId = storeId;
-    try {
-      await browser.cookies.remove(opts);
-    } catch (err) {
-      // A cookie may already be gone; the restore below is the source of truth.
-    }
+      storeId: storeId,
+    });
   }
 }
 
@@ -99,9 +111,10 @@ async function applyProfile(profile, destinationStoreId) {
 
 // Counts successful reloads: a tab that closed mid-switch must not count.
 async function reloadGithubTabs(storeId) {
-  const query = { url: ["https://*.github.com/*"] };
-  if (storeId) query.cookieStoreId = storeId;
-  const tabs = await browser.tabs.query(query);
+  const tabs = await browser.tabs.query({
+    url: ["https://*.github.com/*"],
+    cookieStoreId: storeId,
+  });
   const results = await Promise.all(
     tabs.map((tab) =>
       browser.tabs.reload(tab.id).then(
@@ -114,15 +127,14 @@ async function reloadGithubTabs(storeId) {
 }
 
 async function currentAccount() {
-  const storeId = await activeGitHubStore();
+  const storeId = await activeTabStore();
   try {
-    const opts = {
+    const cookie = await browser.cookies.get({
       url: "https://github.com/",
       name: "dotcom_user",
       firstPartyDomain: GITHUB_FIRST_PARTY_DOMAIN,
-    };
-    if (storeId) opts.storeId = storeId;
-    const cookie = await browser.cookies.get(opts);
+      storeId: storeId,
+    });
     return cookie && cookie.value ? cookie.value : null;
   } catch (err) {
     return null;
@@ -142,13 +154,15 @@ async function handle(message) {
     }
 
     case "capture": {
-      return enqueueStorage(async () => {
-        const storeId = await activeGitHubStore();
+      return enqueue(async () => {
+        const storeId = await activeTabStore();
         const cookies = await getAllGithubCookies(storeId);
         if (!GHAS.usernameFromCookies(cookies)) {
           return { ok: false, error: "no-login" };
         }
-        const fresh = GHAS.profileFromCookies(cookies, { storeId: storeId || null });
+        const fresh = GHAS.profileFromCookies(cookies, {
+          storeId: storeId === DEFAULT_STORE_ID ? null : storeId,
+        });
         const list = await getProfiles();
         const idx = list.findIndex((p) => p.id === fresh.id);
         if (idx >= 0) {
@@ -166,23 +180,29 @@ async function handle(message) {
     }
 
     case "switch": {
-      const list = await getProfiles();
-      const profile = list.find((p) => p.id === message.id);
-      if (!profile) return { ok: false, error: "not-found" };
-      // Switch where the user is looking, not where the session was captured.
-      const destinationStoreId = await activeGitHubStore();
-      await applyProfile(profile, destinationStoreId);
-      const reloaded = await reloadGithubTabs(destinationStoreId);
-      if (reloaded === 0) {
-        // No GitHub tab open in that store: land on GitHub so the switched
-        // session shows.
-        await browser.tabs.create({ url: "https://github.com/" });
-      }
-      return { ok: true, reloaded: reloaded };
+      return enqueue(async () => {
+        const list = await getProfiles();
+        const profile = list.find((p) => p.id === message.id);
+        if (!profile) return { ok: false, error: "not-found" };
+        // Switch where the user is looking, not where the session was
+        // captured.
+        const destinationStoreId = await activeTabStore();
+        await applyProfile(profile, destinationStoreId);
+        const reloaded = await reloadGithubTabs(destinationStoreId);
+        if (reloaded === 0) {
+          // No GitHub tab open in that store: land on GitHub so the switched
+          // session shows.
+          await browser.tabs.create({
+            url: "https://github.com/",
+            cookieStoreId: destinationStoreId,
+          });
+        }
+        return { ok: true, reloaded: reloaded };
+      });
     }
 
     case "delete": {
-      return enqueueStorage(async () => {
+      return enqueue(async () => {
         const list = await getProfiles();
         await setProfiles(list.filter((p) => p.id !== message.id));
         return { ok: true };
@@ -190,7 +210,7 @@ async function handle(message) {
     }
 
     case "rename": {
-      return enqueueStorage(async () => {
+      return enqueue(async () => {
         const name = GHAS.sanitizeName(message.name, 40);
         const list = await getProfiles();
         const profile = list.find((p) => p.id === message.id);
