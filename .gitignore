@@ -1,5 +1,5 @@
+# Build artifact of the Firefox extension; regenerate with
+# github-account-switcher/build.sh
+github-account-switcher/*.xpi
+
 node_modules/
-dist/
-coverage/
-*.log
-.DS_Store

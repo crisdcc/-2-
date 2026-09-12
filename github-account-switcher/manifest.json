@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "GitHub Account Switcher",
+  "version": "1.0.0",
+  "description": "Переключение между аккаунтами GitHub в один тап. Один раз войдите под каждым аккаунтом, сохраните сессию и переключайтесь мгновенно. One-tap GitHub account switcher.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "github-account-switcher@yourdomain.example",
+      "strict_min_version": "142.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    },
+    "gecko_android": {}
+  },
+  "permissions": ["cookies", "storage"],
+  "host_permissions": ["https://*.github.com/*"],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "action": {
+    "default_title": "GitHub Account Switcher",
+    "default_popup": "popup/popup.html",
+    "default_icon": "icons/icon.svg"
+  },
+  "icons": {
+    "16": "icons/icon.svg",
+    "32": "icons/icon.svg",
+    "48": "icons/icon.svg",
+    "96": "icons/icon.svg",
+    "128": "icons/icon.svg"
+  }
+}

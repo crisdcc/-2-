@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>GitHub Account Switcher</title>
+  </head>
+  <body>
+    <header>
+      <h1>GitHub Аккаунты</h1>
+      <p id="currentLine" class="current">…</p>
+    </header>
+
+    <section class="actions">
+      <button id="openBtn" type="button" class="btn ghost">Открыть GitHub</button>
+      <button id="saveBtn" type="button" class="btn primary">＋ Сохранить текущий</button>
+    </section>
+
+    <p id="status" class="status" hidden></p>
+
+    <section id="list" class="list"></section>
+
+    <footer>Нажмите на аккаунт — все вкладки GitHub переключится на него</footer>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
